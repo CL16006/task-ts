@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { sendOtpEmail } from "../services/email";
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -59,4 +60,69 @@ export const logout = (req: Request, res: Response) => {
   });
 
   return res.json({ message: "Logout exitoso" });
+};
+
+export const loginStep1 = async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) return res.status(400).json({ message: "Credenciales inválidas" });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return res.status(400).json({ message: "Credenciales inválidas" });
+
+  // Generar OTP (6 dígitos)
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Guardar OTP con expiración
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      otpCode: otp,
+      otpExpires: new Date(Date.now() + 5 * 60 * 1000), // expira en 5 min
+    },
+  });
+
+  // Enviar email
+  await sendOtpEmail(user.email, otp);
+
+  res.json({ message: "Código enviado", status: "2FA_REQUIRED" });
+};
+
+export const loginStep2 = async (req: Request, res: Response) => {
+  const { email, code } = req.body;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || !user.otpCode)
+    return res.status(400).json({ message: "Código no válido" });
+
+  if (user.otpCode !== code)
+    return res.status(400).json({ message: "Código incorrecto" });
+
+  if (user.otpExpires < new Date())
+    return res.status(400).json({ message: "Código expirado" });
+
+  // Limpiar OTP
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      otpCode: null,
+      otpExpires: null,
+    },
+  });
+
+  // Generar JWT
+  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
+
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+  });
+
+  res.json({ message: "Autenticado", status: "AUTHENTICATED" });
 };
