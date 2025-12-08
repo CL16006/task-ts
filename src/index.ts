@@ -10,11 +10,10 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-// Rutas de autenticación
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

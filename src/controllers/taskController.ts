@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 
-// Crear tarea
 export const createTask = async (req: Request, res: Response) => {
   try {
     const { title, description } = req.body;
@@ -17,7 +16,6 @@ export const createTask = async (req: Request, res: Response) => {
   }
 };
 
-// Obtener todas las tareas del usuario autenticado
 export const getTasks = async (req: Request, res: Response) => {
   try {
     const userId = req.userId!;
@@ -31,7 +29,6 @@ export const getTasks = async (req: Request, res: Response) => {
   }
 };
 
-// Obtener una tarea por ID
 export const getTaskById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -46,7 +43,6 @@ export const getTaskById = async (req: Request, res: Response) => {
   }
 };
 
-// Actualizar tarea
 export const updateTask = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -69,7 +65,6 @@ export const updateTask = async (req: Request, res: Response) => {
   }
 };
 
-// Eliminar tarea
 export const deleteTask = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
