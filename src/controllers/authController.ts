@@ -23,35 +23,6 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
-export const login = async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(400).json({ message: "Usuario no encontrado" });
-
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(400).json({ message: "Contraseña incorrecta" });
-
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || "secretkey",
-      { expiresIn: "1h" }
-    );
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 1000,
-    });
-
-    res.json({ message: "Login exitoso" });
-  } catch (error) {
-    res.status(500).json({ message: "Error al iniciar sesión", error });
-  }
-};
-
 export const logout = (req: Request, res: Response) => {
   res.clearCookie("token", {
     httpOnly: true,
