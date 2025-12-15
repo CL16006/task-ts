@@ -17,6 +17,8 @@ model User {
   Task      Task[]
   otpCode   String?
   otpExpires DateTime?
+  otpAttempts  Int  @default(0)
+  otpBlockedUntil DateTime?
 }
 
 model Task {

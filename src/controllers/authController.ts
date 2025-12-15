@@ -62,33 +62,69 @@ export const loginStep2 = async (req: Request, res: Response) => {
   const { email, code } = req.body;
 
   const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.status(400).json({ message: "Usuario no encontrado" });
 
-  if (!user || !user.otpCode)
-    return res.status(400).json({ message: "Código no válido" });
+  if (user.otpBlockedUntil && user.otpBlockedUntil > new Date()) {
+    return res.status(403).json({
+      message: "Demasiados intentos. Intenta más tarde.",
+      blocked_until: user.otpBlockedUntil,
+    });
+  }
 
-  if (user.otpCode !== code)
-    return res.status(400).json({ message: "Código incorrecto" });
+  if (!user.otpCode || user.otpExpires! < new Date()) {
+    return res.status(400).json({
+      message: "El código ha expirado. Solicita uno nuevo.",
+    });
+  }
 
-  if (user.otpExpires < new Date())
-    return res.status(400).json({ message: "Código expirado" });
+  if (user.otpCode === code) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpCode: null,
+        otpExpires: null,
+        otpAttempts: 0,
+        otpBlockedUntil: null,
+      },
+    });
+
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!, {
+      expiresIn: "1d",
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    });
+
+    return res.json({ message: "Autenticado", status: "AUTHENTICATED" });
+  }
+
+  const newAttempts = user.otpAttempts + 1;
+
+  if (newAttempts >= 5) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpAttempts: 0,
+        otpBlockedUntil: new Date(Date.now() + 5 * 60 * 1000), // 5 min
+      },
+    });
+
+    return res.status(403).json({
+      message: "Demasiados intentos. Usuario bloqueado por 5 minutos.",
+      blocked: true,
+    });
+  }
 
   await prisma.user.update({
     where: { id: user.id },
-    data: {
-      otpCode: null,
-      otpExpires: null,
-    },
+    data: { otpAttempts: newAttempts },
   });
 
-  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-    expiresIn: "1d",
+  return res.status(400).json({
+    message: "Código incorrecto",
+    attempts_left: 5 - newAttempts,
   });
-
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "strict",
-  });
-
-  res.json({ message: "Autenticado", status: "AUTHENTICATED" });
 };
