@@ -43,10 +43,8 @@ export const loginStep1 = async (req: Request, res: Response) => {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(400).json({ message: "Credenciales inválidas" });
 
-  // Generar OTP (6 dígitos)
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // Guardar OTP con expiración
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -55,7 +53,6 @@ export const loginStep1 = async (req: Request, res: Response) => {
     },
   });
 
-  // Enviar email
   await sendOtpEmail(user.email, otp);
 
   res.json({ message: "Código enviado", status: "2FA_REQUIRED" });
@@ -75,7 +72,6 @@ export const loginStep2 = async (req: Request, res: Response) => {
   if (user.otpExpires < new Date())
     return res.status(400).json({ message: "Código expirado" });
 
-  // Limpiar OTP
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -84,7 +80,6 @@ export const loginStep2 = async (req: Request, res: Response) => {
     },
   });
 
-  // Generar JWT
   const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
     expiresIn: "1d",
   });
