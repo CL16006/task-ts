@@ -128,3 +128,32 @@ export const loginStep2 = async (req: Request, res: Response) => {
     attempts_left: 5 - newAttempts,
   });
 };
+
+export const resendOtp = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.status(400).json({ message: "Usuario no encontrado" });
+
+  if (user.otpBlockedUntil && user.otpBlockedUntil > new Date()) {
+    return res.status(403).json({
+      message: "Demasiados intentos. Intenta más tarde.",
+      blocked_until: user.otpBlockedUntil,
+    });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      otpCode: otp,
+      otpExpires: new Date(Date.now() + 5 * 60 * 1000),
+      otpAttempts: 0,
+    },
+  });
+
+  await sendOtpEmail(user.email, otp);
+
+  res.json({ message: "Nuevo código enviado", status: "OTP_RESENT" });
+};
