@@ -88,7 +88,7 @@ export const loginStep2 = async (req: Request, res: Response) => {
       },
     });
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!, {
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
       expiresIn: "1d",
     });
 
