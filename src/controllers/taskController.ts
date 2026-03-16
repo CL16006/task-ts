@@ -52,16 +52,26 @@ export const updateTask = async (req: Request, res: Response) => {
     const existingTask = await prisma.task.findFirst({
       where: { id: Number(id), userId },
     });
-    if (!existingTask) return res.status(404).json({ message: "Tarea no encontrada" });
+
+    if (!existingTask) {
+      return res.status(404).json({ message: "Tarea no encontrada" });
+    }
+
+    const data: any = {};
+
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (completed !== undefined) data.completed = completed;
 
     const updatedTask = await prisma.task.update({
       where: { id: Number(id) },
-      data: { title, description, completed },
+      data,
     });
 
     res.json(updatedTask);
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar tarea", error });
+    console.error(error);
+    res.status(500).json({ message: "Error al actualizar tarea" });
   }
 };
 
