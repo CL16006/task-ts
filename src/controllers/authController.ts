@@ -1,12 +1,26 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { sendOtpEmail } from "../services/email";
+import { clearAuthCookie, setAuthCookie, signAuthToken } from "../utils/auth";
+import {
+  loginStep1Schema,
+  loginStep2Schema,
+  registerSchema,
+  resendOtpSchema,
+} from "../validators/schemas";
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const validation = registerSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Datos inválidos",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { name, email, password } = validation.data;
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(400).json({ message: "Usuario ya existe" });
@@ -24,17 +38,20 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const logout = (req: Request, res: Response) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-  });
-
+  clearAuthCookie(res);
   return res.json({ message: "Logout exitoso" });
 };
 
 export const loginStep1 = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const validation = loginStep1Schema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      message: "Datos inválidos",
+      errors: validation.error.flatten().fieldErrors,
+    });
+  }
+
+  const { email, password } = validation.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -59,7 +76,15 @@ export const loginStep1 = async (req: Request, res: Response) => {
 };
 
 export const loginStep2 = async (req: Request, res: Response) => {
-  const { email, code } = req.body;
+  const validation = loginStep2Schema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      message: "Datos inválidos",
+      errors: validation.error.flatten().fieldErrors,
+    });
+  }
+
+  const { email, code } = validation.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return res.status(400).json({ message: "Usuario no encontrado" });
@@ -88,15 +113,8 @@ export const loginStep2 = async (req: Request, res: Response) => {
       },
     });
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
-      expiresIn: "1d",
-    });
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-    });
+    const token = signAuthToken(user.id);
+    setAuthCookie(res, token);
 
     return res.json({ message: "Autenticado", status: "AUTHENTICATED" });
   }
@@ -130,7 +148,15 @@ export const loginStep2 = async (req: Request, res: Response) => {
 };
 
 export const resendOtp = async (req: Request, res: Response) => {
-  const { email } = req.body;
+  const validation = resendOtpSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      message: "Datos inválidos",
+      errors: validation.error.flatten().fieldErrors,
+    });
+  }
+
+  const { email } = validation.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return res.status(400).json({ message: "Usuario no encontrado" });

@@ -7,11 +7,12 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: "/auth/google/callback",
+      callbackURL: process.env.GOOGLE_CALLBACK_URL || "/api/auth/google/callback",
     },
-    async (_, __, profile, done) => {
+    async (_accessToken: string, _refreshToken: string, profile: any, done: any) => {
       try {
         const email = profile.emails?.[0].value;
+        const name = profile.displayName || "Usuario Google";
 
         if (!email) return done(new Error("No email"), undefined);
 
@@ -22,6 +23,7 @@ passport.use(
         if (!user) {
           user = await prisma.user.create({
             data: {
+              name,
               email,
               password: "", // OAuth no necesita password
             },

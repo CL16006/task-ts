@@ -1,13 +1,26 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import {
+  createTaskSchema,
+  taskIdParamsSchema,
+  updateTaskSchema,
+} from "../validators/schemas";
 
 export const createTask = async (req: Request, res: Response) => {
   try {
-    const { title, description } = req.body;
+    const validation = createTaskSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Datos inválidos",
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { title, description } = validation.data;
     const userId = req.userId!;
 
     const task = await prisma.task.create({
-      data: { title, description, userId },
+      data: { title, description: description ?? null, userId },
     });
 
     res.status(201).json(task);
@@ -31,10 +44,18 @@ export const getTasks = async (req: Request, res: Response) => {
 
 export const getTaskById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      return res.status(400).json({
+        message: "Parámetros inválidos",
+        errors: paramsValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { id } = paramsValidation.data;
     const userId = req.userId!;
     const task = await prisma.task.findFirst({
-      where: { id: Number(id), userId },
+      where: { id, userId },
     });
     if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
     res.json(task);
@@ -45,12 +66,28 @@ export const getTaskById = async (req: Request, res: Response) => {
 
 export const updateTask = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { title, description, completed } = req.body;
+    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      return res.status(400).json({
+        message: "Parámetros inválidos",
+        errors: paramsValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const bodyValidation = updateTaskSchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      return res.status(400).json({
+        message: "Datos inválidos",
+        errors: bodyValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { id } = paramsValidation.data;
+    const { title, description, completed } = bodyValidation.data;
     const userId = req.userId!;
 
     const existingTask = await prisma.task.findFirst({
-      where: { id: Number(id), userId },
+      where: { id, userId },
     });
 
     if (!existingTask) {
@@ -64,7 +101,7 @@ export const updateTask = async (req: Request, res: Response) => {
     if (completed !== undefined) data.completed = completed;
 
     const updatedTask = await prisma.task.update({
-      where: { id: Number(id) },
+      where: { id },
       data,
     });
 
@@ -77,15 +114,23 @@ export const updateTask = async (req: Request, res: Response) => {
 
 export const deleteTask = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
+    if (!paramsValidation.success) {
+      return res.status(400).json({
+        message: "Parámetros inválidos",
+        errors: paramsValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { id } = paramsValidation.data;
     const userId = req.userId!;
 
     const existingTask = await prisma.task.findFirst({
-      where: { id: Number(id), userId },
+      where: { id, userId },
     });
     if (!existingTask) return res.status(404).json({ message: "Tarea no encontrada" });
 
-    await prisma.task.delete({ where: { id: Number(id) } });
+    await prisma.task.delete({ where: { id } });
 
     res.json({ message: "Tarea eliminada" });
   } catch (error) {
