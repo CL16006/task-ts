@@ -1,139 +1,263 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
-import {
-  createTaskSchema,
-  taskIdParamsSchema,
-  updateTaskSchema,
-} from "../validators/schemas";
-
+import { createTaskSchema, updateTaskSchema, taskIdParamsSchema } from "../validators/schemas";
+import { validateBody, validate } from "../middlewares/validationMiddleware";
 export const createTask = async (req: Request, res: Response) => {
   try {
-    const validation = createTaskSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        message: "Datos inválidos",
-        errors: validation.error.flatten().fieldErrors,
-      });
-    }
-
-    const { title, description } = validation.data;
+    const { title, description, completed } = req.body;
     const userId = req.userId!;
 
     const task = await prisma.task.create({
-      data: { title, description: description ?? null, userId },
+      data: {
+        title,
+        description,
+        completed: completed || false,
+        userId
+      }
     });
 
-    res.status(201).json(task);
+    return res.status(201).json({
+      success: true,
+      message: "Tarea creada exitosamente",
+      task
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error al crear tarea", error });
+    console.error("Error en createTask:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
 
 export const getTasks = async (req: Request, res: Response) => {
   try {
     const userId = req.userId!;
+
     const tasks = await prisma.task.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' }
     });
-    res.json(tasks);
+
+    return res.json({
+      success: true,
+      message: "Tareas obtenidas exitosamente",
+      tasks
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error al obtener tareas", error });
+    console.error("Error en getTasks:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
 
 export const getTaskById = async (req: Request, res: Response) => {
   try {
-    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
-    if (!paramsValidation.success) {
-      return res.status(400).json({
-        message: "Parámetros inválidos",
-        errors: paramsValidation.error.flatten().fieldErrors,
+    const { id } = req.params;
+    const userId = req.userId!;
+
+    const taskId = parseInt(id, 10);
+    const task = await prisma.task.findUnique({
+      where: {
+        id: taskId,
+        userId
+      }
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Tarea no encontrada"
       });
     }
 
-    const { id } = paramsValidation.data;
-    const userId = req.userId!;
-    const task = await prisma.task.findFirst({
-      where: { id, userId },
+    return res.json({
+      success: true,
+      message: "Tarea obtenida exitosamente",
+      task
     });
-    if (!task) return res.status(404).json({ message: "Tarea no encontrada" });
-    res.json(task);
   } catch (error) {
-    res.status(500).json({ message: "Error al obtener tarea", error });
+    console.error("Error en getTaskById:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
 
 export const updateTask = async (req: Request, res: Response) => {
   try {
-    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
-    if (!paramsValidation.success) {
-      return res.status(400).json({
-        message: "Parámetros inválidos",
-        errors: paramsValidation.error.flatten().fieldErrors,
-      });
-    }
-
-    const bodyValidation = updateTaskSchema.safeParse(req.body);
-    if (!bodyValidation.success) {
-      return res.status(400).json({
-        message: "Datos inválidos",
-        errors: bodyValidation.error.flatten().fieldErrors,
-      });
-    }
-
-    const { id } = paramsValidation.data;
-    const { title, description, completed } = bodyValidation.data;
+    const { id } = req.params;
     const userId = req.userId!;
+    const { title, description, completed } = req.body;
 
-    const existingTask = await prisma.task.findFirst({
-      where: { id, userId },
+    const taskId = parseInt(id, 10);
+    const task = await prisma.task.findUnique({
+      where: {
+        id: taskId,
+        userId
+      }
     });
 
-    if (!existingTask) {
-      return res.status(404).json({ message: "Tarea no encontrada" });
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Tarea no encontrada"
+      });
     }
-
-    const data: any = {};
-
-    if (title !== undefined) data.title = title;
-    if (description !== undefined) data.description = description;
-    if (completed !== undefined) data.completed = completed;
 
     const updatedTask = await prisma.task.update({
-      where: { id },
-      data,
+      where: { id: taskId },
+      data: {
+        title,
+        description,
+        completed
+      }
     });
 
-    res.json(updatedTask);
+    return res.json({
+      success: true,
+      message: "Tarea actualizada exitosamente",
+      task: updatedTask
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error al actualizar tarea" });
+    console.error("Error en updateTask:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
 
 export const deleteTask = async (req: Request, res: Response) => {
   try {
-    const paramsValidation = taskIdParamsSchema.safeParse(req.params);
-    if (!paramsValidation.success) {
-      return res.status(400).json({
-        message: "Parámetros inválidos",
-        errors: paramsValidation.error.flatten().fieldErrors,
+    const { id } = req.params;
+    const userId = req.userId!;
+
+    const taskId = parseInt(id, 10);
+
+    const task = await prisma.task.findUnique({
+      where: {
+        id: taskId,
+        userId
+      }
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Tarea no encontrada"
       });
     }
 
-    const { id } = paramsValidation.data;
-    const userId = req.userId!;
-
-    const existingTask = await prisma.task.findFirst({
-      where: { id, userId },
+    await prisma.task.delete({
+      where: { id: taskId }
     });
-    if (!existingTask) return res.status(404).json({ message: "Tarea no encontrada" });
 
-    await prisma.task.delete({ where: { id } });
-
-    res.json({ message: "Tarea eliminada" });
+    return res.json({
+      success: true,
+      message: "Tarea eliminada exitosamente"
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error al eliminar tarea", error });
+    console.error("Error en deleteTask:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
+
+
+
+
+
+
+
+
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Tarea no encontrada"
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Tarea obtenida exitosamente",
+      task
+    });
+  } catch (error) {
+
+
+    console.error("Error en getTaskById:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
+  }
+};
+
+
+export const updateTask = async (req: Request, res: Response) => {
+  try {
+
+
+
+
+
+
+
+
+
+    const { id } = req.params;
+    const userId = req.userId!;
+
+
+
+    const taskId = parseInt(id, 10);
+    const task = await prisma.task.findUnique({
+      where: {
+        id: taskId,
+        userId
+      }
+    });
+
+
+
+
+
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Tarea no encontrada"
+      });
+    }
+
+    const updatedTask = await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        title,
+        description,
+        completed
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: "Tarea actualizada exitosamente",
+      task: updatedTask
+    });
+  } catch (error) {
+
+    console.error("Error en updateTask:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
+  }
+};
+
